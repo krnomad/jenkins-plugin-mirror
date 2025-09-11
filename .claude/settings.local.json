@@ -7,7 +7,19 @@
       "Bash(./scripts/02-process-chunk.sh:*)",
       "Bash(cat:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__github__create_repository",
+      "Bash(gh:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(./scripts/01-generate-plugin-list-improved.sh:*)",
+      "Bash(awk:*)",
+      "Read(//var/www/jenkins-mirror/**)",
+      "Bash(pip install:*)",
+      "Bash(./scripts/01-generate-plugin-list-smart.sh:*)"
     ]
   },
   "enabledMcpjsonServers": [

@@ -1,0 +1,237 @@
+name: Jenkins Plugin Mirror (Optimized)
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'  # Monthly on 1st at 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      mirror_type:
+        description: 'Type of mirror to create'
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - essential-only
+          - full-filtered
+        default: essential-only
+      tag_suffix:
+        description: 'Optional suffix for release tag'
+        required: false
+        type: string
+
+env:
+  MIRROR_TYPE: ${{ inputs.mirror_type || 'essential-only' }}
+
+jobs:
+  prepare-metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.vars.outputs.release_tag }}
+      chunk_count: ${{ steps.generate-list.outputs.chunk_count }}
+      estimated_size: ${{ steps.generate-list.outputs.estimated_size }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set Release Tag
+        id: vars
+        run: |
+          VERSION="v$(date +'%Y.%m.%d')"
+          TAG_SUFFIX="${{ inputs.tag_suffix }}"
+          MIRROR_TYPE="${{ env.MIRROR_TYPE }}"
+          
+          case "$MIRROR_TYPE" in
+            "dry-run")
+              RELEASE_TAG="dry-run-$VERSION$TAG_SUFFIX"
+              ;;
+            "essential-only")
+              RELEASE_TAG="essential-$VERSION$TAG_SUFFIX"
+              ;;
+            "full-filtered")
+              RELEASE_TAG="filtered-$VERSION$TAG_SUFFIX"
+              ;;
+            *)
+              RELEASE_TAG="$MIRROR_TYPE-$VERSION$TAG_SUFFIX"
+              ;;
+          esac
+          
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Creating release: $RELEASE_TAG"
+
+      - name: Install Python packaging module
+        run: pip install packaging
+
+      - name: Generate Plugin List and Split into Chunks
+        id: generate-list
+        run: |
+          chmod +x ./scripts/01-generate-plugin-list-smart.sh
+          
+          case "${{ env.MIRROR_TYPE }}" in
+            "dry-run")
+              ./scripts/01-generate-plugin-list-smart.sh true
+              ;;
+            *)
+              ./scripts/01-generate-plugin-list-smart.sh false
+              ;;
+          esac
+          
+          CHUNK_COUNT=$(ls chunk_*.txt 2>/dev/null | wc -l || echo "0")
+          ESTIMATED_SIZE=$(cat plugin_list.txt | awk '{sum += $2} END {print int(sum/1024/1024)}' || echo "0")
+          
+          echo "chunk_count=$CHUNK_COUNT" >> $GITHUB_OUTPUT
+          echo "estimated_size=${ESTIMATED_SIZE}MB" >> $GITHUB_OUTPUT
+          
+          echo "Generated $CHUNK_COUNT chunks, estimated size: ${ESTIMATED_SIZE}MB"
+      
+      - name: Upload chunk manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-manifests
+          path: chunk_*.txt
+          retention-days: 1
+
+  process-chunks:
+    needs: prepare-metadata
+    runs-on: ubuntu-latest
+    if: needs.prepare-metadata.outputs.chunk_count > 0
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Download chunk manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: chunk-manifests
+
+      - name: Check if chunk exists
+        id: check_chunk
+        run: |
+          if [ -f "chunk_${{ matrix.chunk_id }}.txt" ] && [ -s "chunk_${{ matrix.chunk_id }}.txt" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Chunk ${{ matrix.chunk_id }} exists with $(wc -l < chunk_${{ matrix.chunk_id }}.txt) plugins"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Chunk ${{ matrix.chunk_id }} does not exist or is empty"
+          fi
+
+      - name: Minimal disk cleanup (only if chunk exists)
+        if: steps.check_chunk.outputs.exists == 'true'
+        run: |
+          # Only remove what's absolutely necessary, skip time-consuming cleanups
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          df -h
+
+      - name: Process Chunk ${{ matrix.chunk_id }}
+        if: steps.check_chunk.outputs.exists == 'true'
+        run: |
+          chmod +x ./scripts/02-process-chunk.sh
+          ./scripts/02-process-chunk.sh ${{ matrix.chunk_id }}
+          
+      - name: Create empty chunk (if chunk doesn't exist)
+        if: steps.check_chunk.outputs.exists == 'false'
+        run: |
+          mkdir -p jenkins-plugins-chunk-${{ matrix.chunk_id }}
+          echo "This chunk was not needed" > jenkins-plugins-chunk-${{ matrix.chunk_id }}/.empty
+          
+      - name: Upload processed chunk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jenkins-plugins-chunk-${{ matrix.chunk_id }}
+          path: jenkins-plugins-chunk-${{ matrix.chunk_id }}/
+          retention-days: 1
+
+  create-release:
+    needs: [prepare-metadata, process-chunks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create release directory
+        run: mkdir -p release_assets/plugins
+
+      - name: Download all processed chunk artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets/plugins
+          pattern: jenkins-plugins-chunk-*
+          merge-multiple: true
+
+      - name: Clean up empty chunks
+        run: |
+          find release_assets/plugins -name ".empty" -delete
+          find release_assets/plugins -empty -type d -delete
+
+      - name: Generate update-center.json
+        run: |
+          chmod +x ./scripts/03-generate-update-center.sh
+          ./scripts/03-generate-update-center.sh release_assets/plugins release_assets/update-center.json
+
+      - name: Create release summary
+        run: |
+          PLUGIN_COUNT=$(find release_assets/plugins -name "*.hpi" | wc -l)
+          TOTAL_SIZE_MB=$(du -sm release_assets | cut -f1)
+          MIRROR_TYPE="${{ env.MIRROR_TYPE }}"
+          
+          cat > release_assets/RELEASE_INFO.md << EOF
+          # Jenkins Plugin Mirror - ${{ needs.prepare-metadata.outputs.release_tag }}
+          
+          **Mirror Type**: ${MIRROR_TYPE}
+          **Plugins**: ${PLUGIN_COUNT}
+          **Total Size**: ${TOTAL_SIZE_MB}MB
+          **Generated**: $(date -u)
+          
+          ## Mirror Types:
+          - **dry-run**: 5 plugins for testing
+          - **essential-only**: Filtered plugins, max 3 versions per plugin, <200MB each
+          - **full-filtered**: All plugins with size/version filtering
+          
+          ## Usage:
+          1. Download and extract jenkins-plugins-mirror.tar.gz
+          2. Edit update-center.json to replace 'http://your-mirror.example.com' with your server URL
+          3. Deploy using one of the provided server configurations
+          
+          EOF
+
+      - name: Package release assets  
+        run: |
+          cd release_assets
+          tar -czf ../jenkins-plugins-mirror.tar.gz .
+          sha256sum ../jenkins-plugins-mirror.tar.gz > ../jenkins-plugins-mirror.tar.gz.sha256
+          cd ..
+          
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          RELEASE_TAG: ${{ needs.prepare-metadata.outputs.release_tag }}
+        run: |
+          # Delete existing release if it exists
+          gh release list | grep -q "$RELEASE_TAG" && gh release delete "$RELEASE_TAG" -y || true
+          
+          PLUGIN_COUNT=$(find release_assets/plugins -name "*.hpi" | wc -l)
+          TOTAL_SIZE_MB=$(du -sm release_assets | cut -f1)
+          
+          gh release create "$RELEASE_TAG" \
+            --title "Jenkins Plugins Mirror - $RELEASE_TAG" \
+            --notes "Automated Jenkins plugins mirror (${{ env.MIRROR_TYPE }})
+            
+          📊 **Statistics:**
+          - Plugins: ${PLUGIN_COUNT}
+          - Size: ${TOTAL_SIZE_MB}MB
+          - Estimated size: ${{ needs.prepare-metadata.outputs.estimated_size }}
+          
+          🚀 **Quick Start:**
+          1. Download jenkins-plugins-mirror.tar.gz
+          2. Run: \`./download-latest-release.sh\`
+          3. Deploy using Docker: \`cd server/docker-image-layered && docker-compose up\`
+          
+          See README.md for detailed setup instructions." \
+            --latest \
+            jenkins-plugins-mirror.tar.gz \
+            jenkins-plugins-mirror.tar.gz.sha256
