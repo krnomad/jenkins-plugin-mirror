@@ -58,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        chunk_id: ${{ fromJson(format('[{0}]', join(range(1, needs.prepare-metadata.outputs.chunk_count + 1), ','))) }}
+        chunk_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -81,8 +81,14 @@ jobs:
       - name: Process Chunk ${{ matrix.chunk_id }}
         id: process
         run: |
-          chmod +x ./scripts/02-process-chunk.sh
-          ./scripts/02-process-chunk.sh ${{ matrix.chunk_id }}
+          if [ -f "chunk_${{ matrix.chunk_id }}.txt" ]; then
+            chmod +x ./scripts/02-process-chunk.sh
+            ./scripts/02-process-chunk.sh ${{ matrix.chunk_id }}
+          else
+            echo "Chunk ${{ matrix.chunk_id }} does not exist, skipping..."
+            mkdir -p jenkins-plugins-chunk-${{ matrix.chunk_id }}
+            touch jenkins-plugins-chunk-${{ matrix.chunk_id }}/.empty
+          fi
           
       - name: Upload processed chunk artifact
         uses: actions/upload-artifact@v4
