@@ -12,6 +12,7 @@ on:
         options:
           - dry-run
           - essential-only
+          - comprehensive
           - full-filtered
         default: essential-only
       tag_suffix:
@@ -47,6 +48,9 @@ jobs:
             "essential-only")
               RELEASE_TAG="essential-$VERSION$TAG_SUFFIX"
               ;;
+            "comprehensive")
+              RELEASE_TAG="comprehensive-$VERSION$TAG_SUFFIX"
+              ;;
             "full-filtered")
               RELEASE_TAG="filtered-$VERSION$TAG_SUFFIX"
               ;;
@@ -65,10 +69,20 @@ jobs:
         id: generate-list
         run: |
           chmod +x ./scripts/01-generate-plugin-list-smart.sh
+          chmod +x ./scripts/01-generate-plugin-list-comprehensive.sh
           
           case "${{ env.MIRROR_TYPE }}" in
             "dry-run")
-              ./scripts/01-generate-plugin-list-smart.sh true
+              ./scripts/01-generate-plugin-list-comprehensive.sh dry-run true
+              ;;
+            "essential-only")
+              ./scripts/01-generate-plugin-list-comprehensive.sh essential-only false
+              ;;
+            "comprehensive")
+              ./scripts/01-generate-plugin-list-comprehensive.sh comprehensive false
+              ;;
+            "full-filtered")
+              ./scripts/01-generate-plugin-list-comprehensive.sh full-filtered false
               ;;
             *)
               ./scripts/01-generate-plugin-list-smart.sh false
@@ -189,8 +203,9 @@ jobs:
           
           ## Mirror Types:
           - **dry-run**: 5 plugins for testing
-          - **essential-only**: Filtered plugins, max 3 versions per plugin, <200MB each
-          - **full-filtered**: All plugins with size/version filtering
+          - **essential-only**: Popular plugins, max 3 versions per plugin, <200MB each
+          - **comprehensive**: Full mirror with historical versions, max 10 versions per plugin, <1GB each
+          - **full-filtered**: All plugins with size/version filtering, max 5 versions per plugin, <500MB each
           
           ## Usage:
           1. Download and extract jenkins-plugins-mirror.tar.gz

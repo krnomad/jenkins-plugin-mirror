@@ -19,7 +19,12 @@
       "Bash(awk:*)",
       "Read(//var/www/jenkins-mirror/**)",
       "Bash(pip install:*)",
-      "Bash(./scripts/01-generate-plugin-list-smart.sh:*)"
+      "Bash(./scripts/01-generate-plugin-list-smart.sh:*)",
+      "Bash(python3:*)",
+      "Bash(sed:*)",
+      "Read(//opt/jenkins-mirror-scripts/**)",
+      "Bash(timeout 60 rsync --list-only --stats --dry-run rsync://rsync.osuosl.org/jenkins/plugins/)",
+      "Bash(./scripts/01-generate-plugin-list-comprehensive.sh:*)"
     ]
   },
   "enabledMcpjsonServers": [
