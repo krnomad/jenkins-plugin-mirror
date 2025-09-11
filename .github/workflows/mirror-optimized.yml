@@ -199,12 +199,96 @@ jobs:
           
           EOF
 
-      - name: Package release assets  
+      - name: Create multi-part release packages
         run: |
           cd release_assets
-          tar -czf ../jenkins-plugins-mirror.tar.gz .
-          sha256sum ../jenkins-plugins-mirror.tar.gz > ../jenkins-plugins-mirror.tar.gz.sha256
+          
+          # Create directory structure for packaging
+          TOTAL_SIZE_MB=$(du -sm . | cut -f1)
+          echo "Total release size: ${TOTAL_SIZE_MB}MB"
+          
+          # Split plugins into parts to stay under 2GB limit (1.8GB target per part)
+          TARGET_SIZE_MB=1800
+          
+          mkdir -p ../release_parts
+          part_num=1
+          current_size=0
+          current_part_dir="../release_parts/part${part_num}"
+          mkdir -p "$current_part_dir/plugins"
+          
+          # Copy update-center.json to all parts
+          cp update-center.json "$current_part_dir/"
+          cp RELEASE_INFO.md "$current_part_dir/"
+          
+          # Sort plugins by size and distribute
+          find plugins -name "*.hpi" -exec du -m {} + | sort -nr | while read size_mb file; do
+            if [ $((current_size + size_mb)) -gt $TARGET_SIZE_MB ] && [ $current_size -gt 0 ]; then
+              echo "Part $part_num: ${current_size}MB"
+              part_num=$((part_num + 1))
+              current_size=0
+              current_part_dir="../release_parts/part${part_num}"
+              mkdir -p "$current_part_dir/plugins"
+              cp update-center.json "$current_part_dir/"
+              cp RELEASE_INFO.md "$current_part_dir/"
+            fi
+            
+            cp "$file" "$current_part_dir/plugins/"
+            current_size=$((current_size + size_mb))
+          done
+          
+          echo "Part $part_num: ${current_size}MB"
+          
+          cd ../release_parts
+          
+          # Create compressed parts
+          for part_dir in part*; do
+            if [ -d "$part_dir" ]; then
+              part_name=$(basename "$part_dir")
+              echo "Creating jenkins-plugins-mirror-${part_name}.tar.gz..."
+              tar -czf "../jenkins-plugins-mirror-${part_name}.tar.gz" -C "$part_dir" .
+              sha256sum "../jenkins-plugins-mirror-${part_name}.tar.gz" > "../jenkins-plugins-mirror-${part_name}.tar.gz.sha256"
+            fi
+          done
+          
           cd ..
+          
+          # Create assembly script
+          cat > assemble-mirror.sh << 'EOF'
+          #!/bin/bash
+          # Jenkins Plugin Mirror Assembly Script
+          set -e
+          
+          MIRROR_DIR="jenkins-mirror"
+          
+          echo "🔧 Jenkins Plugin Mirror Assembly"
+          echo "=================================="
+          
+          # Create target directory
+          mkdir -p "$MIRROR_DIR/plugins"
+          
+          # Extract all parts
+          for part in jenkins-plugins-mirror-part*.tar.gz; do
+            if [ -f "$part" ]; then
+              echo "Extracting $part..."
+              tar -xzf "$part" -C "$MIRROR_DIR" --skip-old-files
+            fi
+          done
+          
+          PLUGIN_COUNT=$(find "$MIRROR_DIR/plugins" -name "*.hpi" | wc -l)
+          TOTAL_SIZE_MB=$(du -sm "$MIRROR_DIR" | cut -f1)
+          
+          echo ""
+          echo "✅ Assembly Complete!"
+          echo "📊 Statistics:"
+          echo "   - Plugins: $PLUGIN_COUNT"
+          echo "   - Total Size: ${TOTAL_SIZE_MB}MB"
+          echo "   - Directory: $MIRROR_DIR/"
+          echo ""
+          echo "🚀 Next Steps:"
+          echo "   1. Edit $MIRROR_DIR/update-center.json to set your server URL"
+          echo "   2. Deploy using: cd server/docker-image-layered && docker-compose up"
+          EOF
+          chmod +x assemble-mirror.sh
           
       - name: Create GitHub Release
         env:
@@ -216,22 +300,36 @@ jobs:
           
           PLUGIN_COUNT=$(find release_assets/plugins -name "*.hpi" | wc -l)
           TOTAL_SIZE_MB=$(du -sm release_assets | cut -f1)
+          PART_COUNT=$(ls jenkins-plugins-mirror-part*.tar.gz | wc -l)
           
           gh release create "$RELEASE_TAG" \
-            --title "Jenkins Plugins Mirror - $RELEASE_TAG" \
-            --notes "Automated Jenkins plugins mirror (${{ env.MIRROR_TYPE }})
+            --title "Jenkins Plugins Mirror - $RELEASE_TAG (Multi-Part)" \
+            --notes "Automated Jenkins plugins mirror (${{ env.MIRROR_TYPE }}) - Multi-Part Release
             
           📊 **Statistics:**
           - Plugins: ${PLUGIN_COUNT}
-          - Size: ${TOTAL_SIZE_MB}MB
+          - Total Size: ${TOTAL_SIZE_MB}MB
+          - Parts: ${PART_COUNT} files (each <2GB)
           - Estimated size: ${{ needs.prepare-metadata.outputs.estimated_size }}
           
           🚀 **Quick Start:**
-          1. Download jenkins-plugins-mirror.tar.gz
-          2. Run: \`./download-latest-release.sh\`
+          1. Download all jenkins-plugins-mirror-part*.tar.gz files
+          2. Run: \`./assemble-mirror.sh\` to combine parts
           3. Deploy using Docker: \`cd server/docker-image-layered && docker-compose up\`
+          
+          **Multi-Part Download:**
+          \`\`\`bash
+          # Download all parts
+          gh release download $RELEASE_TAG --pattern='jenkins-plugins-mirror-part*.tar.gz'
+          gh release download $RELEASE_TAG --pattern='assemble-mirror.sh'
+          
+          # Assemble
+          chmod +x assemble-mirror.sh
+          ./assemble-mirror.sh
+          \`\`\`
           
           See README.md for detailed setup instructions." \
             --latest \
-            jenkins-plugins-mirror.tar.gz \
-            jenkins-plugins-mirror.tar.gz.sha256
+            jenkins-plugins-mirror-part*.tar.gz \
+            jenkins-plugins-mirror-part*.tar.gz.sha256 \
+            assemble-mirror.sh
