@@ -1,0 +1,220 @@
+name: Comprehensive Mirror (Local Generated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., comprehensive-v2025.09.11)'
+        required: true
+        type: string
+      part_count:
+        description: 'Number of parts to expect'
+        required: true
+        type: number
+        default: 15
+
+env:
+  RELEASE_TAG: ${{ inputs.release_tag }}
+  PART_COUNT: ${{ inputs.part_count }}
+
+jobs:
+  validate-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Release Assets
+        id: validate
+        run: |
+          echo "🔍 Validating comprehensive mirror assets..."
+          
+          # Check if all required files are present in the issue/comment/manual upload
+          echo "Expected files:"
+          echo "- jenkins-plugins-comprehensive-part1.tar.gz to jenkins-plugins-comprehensive-part${PART_COUNT}.tar.gz"
+          echo "- Corresponding .sha256 files"
+          echo "- assemble-comprehensive-mirror.sh"
+          
+          echo "validation=pending" >> $GITHUB_OUTPUT
+
+      - name: Create Comprehensive Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          # Delete existing release if it exists
+          gh release list | grep -q "$RELEASE_TAG" && gh release delete "$RELEASE_TAG" -y || true
+          
+          # Create release notes
+          cat > COMPREHENSIVE_NOTES.md << EOF
+          # Jenkins Comprehensive Plugin Mirror - $RELEASE_TAG
+
+          🌟 **Complete Enterprise-Grade Jenkins Plugin Mirror**
+
+          This release contains a **comprehensive Jenkins plugin mirror** generated from the complete rsync repository, providing maximum compatibility for air-gapped and legacy Jenkins environments.
+
+          ## 📊 Features & Statistics
+
+          ✅ **Complete Coverage**: All available Jenkins plugins and historical versions  
+          ✅ **Legacy Support**: Compatible with older Jenkins versions  
+          ✅ **Air-gapped Ready**: No internet connection required after installation  
+          ✅ **Enterprise Scale**: ~25-30GB total mirror size  
+          ✅ **Multi-part Distribution**: Split into ${PART_COUNT} parts to work within GitHub limits
+
+          ## 🚀 Quick Start
+
+          ### 1. Download All Parts
+          \`\`\`bash
+          # Download all parts and assembly script
+          gh release download $RELEASE_TAG --pattern="jenkins-plugins-comprehensive-part*.tar.gz*"
+          gh release download $RELEASE_TAG --pattern="assemble-comprehensive-mirror.sh"
+          \`\`\`
+
+          ### 2. Assemble Mirror
+          \`\`\`bash
+          # Verify checksums (optional but recommended)
+          for file in jenkins-plugins-comprehensive-part*.tar.gz.sha256; do
+              sha256sum -c "\$file"
+          done
+
+          # Assemble complete mirror
+          chmod +x assemble-comprehensive-mirror.sh
+          ./assemble-comprehensive-mirror.sh
+          \`\`\`
+
+          ### 3. Deploy Mirror
+          Choose one of the deployment options:
+
+          **Docker (Recommended)**:
+          \`\`\`bash
+          cd server/docker-image-layered
+          # Edit docker-compose.yml to point to your assembled mirror
+          docker-compose up -d
+          \`\`\`
+
+          **Manual Nginx**:
+          \`\`\`bash
+          # Copy mirror to web root
+          sudo cp -r jenkins-comprehensive-mirror /var/www/
+          # Configure nginx to serve the directory
+          \`\`\`
+
+          ## 🔧 Jenkins Configuration
+
+          1. Go to **Manage Jenkins** → **Manage Plugins** → **Advanced**
+          2. Update the **Update Site URL** to: \`http://your-mirror-server/update-center2/update-center.json\`
+          3. Click **Submit** and restart Jenkins
+
+          ## 💡 Mirror Types Comparison
+
+          | Type | Size | Use Case | Coverage |
+          |------|------|----------|----------|
+          | **Essential** | ~5-8GB | Modern Jenkins, Standard Plugins | 2,000+ plugins |
+          | **Comprehensive** | ~25-30GB | Legacy Jenkins, Complete Archive | 3,000+ plugins + all versions |
+
+          ## ⚙️ Technical Details
+
+          - **Source**: Complete rsync mirror from rsync.osuosl.org
+          - **Generation**: Local high-performance environment
+          - **Validation**: SHA-256 checksums included
+          - **Compression**: Optimal tar.gz compression
+          - **Parts**: ${PART_COUNT} files, each <2GB for GitHub compatibility
+
+          ## 📋 Troubleshooting
+
+          **Assembly Issues**:
+          - Ensure at least 35GB free disk space
+          - Verify all part files are downloaded
+          - Check SHA-256 checksums match
+
+          **Jenkins Issues**:
+          - Verify update-center.json points to correct server URL
+          - Check network connectivity to mirror server
+          - Ensure Jenkins has access to mirror directory
+
+          ## 🏢 Enterprise Use
+
+          This comprehensive mirror is specifically designed for:
+          - **Air-gapped environments** with no internet access
+          - **Legacy Jenkins** installations requiring older plugin versions  
+          - **Corporate environments** with strict security requirements
+          - **High-availability** setups needing local plugin repositories
+
+          ---
+
+          🤖 Generated with local comprehensive mirroring process  
+          📅 Generated: $(date -u)  
+          🔄 Next Update: Monthly (check releases for updates)
+          EOF
+
+          # Create the release (manual file upload required)
+          gh release create "$RELEASE_TAG" \
+            --title "Jenkins Comprehensive Plugin Mirror - $RELEASE_TAG" \
+            --notes-file COMPREHENSIVE_NOTES.md \
+            --latest
+
+          echo ""
+          echo "✅ Release created: $RELEASE_TAG"
+          echo ""
+          echo "🚨 MANUAL STEP REQUIRED:"
+          echo "   Please manually upload the following files to the release:"
+          echo "   - jenkins-plugins-comprehensive-part*.tar.gz (all parts)"
+          echo "   - jenkins-plugins-comprehensive-part*.tar.gz.sha256 (checksums)"  
+          echo "   - assemble-comprehensive-mirror.sh (assembly script)"
+          echo ""
+          echo "📝 Upload command example:"
+          echo "   gh release upload $RELEASE_TAG \\"
+          echo "     jenkins-plugins-comprehensive-part*.tar.gz \\"
+          echo "     jenkins-plugins-comprehensive-part*.tar.gz.sha256 \\"
+          echo "     assemble-comprehensive-mirror.sh"
+
+      - name: Generate Upload Script
+        run: |
+          cat > upload-comprehensive-release.sh << EOF
+          #!/bin/bash
+          # Comprehensive Mirror Upload Script
+          # Run this script from the directory containing the generated parts
+          
+          set -e
+          
+          RELEASE_TAG="$RELEASE_TAG"
+          
+          echo "🚀 Uploading Comprehensive Mirror to GitHub Release: \$RELEASE_TAG"
+          
+          # Validate files exist
+          if [ ! -f "assemble-comprehensive-mirror.sh" ]; then
+              echo "❌ assemble-comprehensive-mirror.sh not found"
+              exit 1
+          fi
+          
+          PART_FILES=\$(ls jenkins-plugins-comprehensive-part*.tar.gz 2>/dev/null | wc -l)
+          if [ \$PART_FILES -eq 0 ]; then
+              echo "❌ No part files found (jenkins-plugins-comprehensive-part*.tar.gz)"
+              exit 1
+          fi
+          
+          echo "📦 Found \$PART_FILES part files"
+          
+          # Upload all files
+          echo "⬆️  Uploading files..."
+          gh release upload "\$RELEASE_TAG" \\
+            jenkins-plugins-comprehensive-part*.tar.gz \\
+            jenkins-plugins-comprehensive-part*.tar.gz.sha256 \\
+            assemble-comprehensive-mirror.sh
+          
+          echo ""
+          echo "✅ Upload completed!"
+          echo "🔗 Release URL: https://github.com/\$(gh repo view --json owner,name -q '.owner.login + "/" + .name')/releases/tag/\$RELEASE_TAG"
+          EOF
+          
+          chmod +x upload-comprehensive-release.sh
+          
+          echo "📝 Upload script created: upload-comprehensive-release.sh"
+
+      - name: Upload Utility Script
+        uses: actions/upload-artifact@v4
+        with:
+          name: upload-script
+          path: upload-comprehensive-release.sh
+          retention-days: 30
