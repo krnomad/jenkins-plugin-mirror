@@ -1,0 +1,137 @@
+name: Jenkins Plugin Mirror CI
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'  # 매월 1일 02:00 UTC에 실행
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (downloads only 3 plugins)'
+        required: true
+        type: boolean
+        default: false
+      tag_suffix:
+        description: 'Optional suffix for release tag (e.g., -manual)'
+        required: false
+        type: string
+
+jobs:
+  prepare-metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.vars.outputs.release_tag }}
+      chunk_count: ${{ steps.generate-list.outputs.chunk_count }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set Release Tag
+        id: vars
+        run: |
+          VERSION="v$(date +'%Y.%m.%d')"
+          TAG_SUFFIX="${{ inputs.tag_suffix }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          RELEASE_TAG="$VERSION$TAG_SUFFIX"
+          if [ "$DRY_RUN" = "true" ]; then
+            RELEASE_TAG="dry-run-$VERSION"
+          fi
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate Plugin List and Split into Chunks
+        id: generate-list
+        run: |
+          chmod +x ./scripts/01-generate-plugin-list.sh
+          ./scripts/01-generate-plugin-list.sh ${{ inputs.dry_run }}
+          CHUNK_COUNT=$(ls chunk_*.txt | wc -l)
+          echo "chunk_count=$CHUNK_COUNT" >> $GITHUB_OUTPUT
+      
+      - name: Upload chunk manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: chunk-manifests
+          path: chunk_*.txt
+          retention-days: 1
+
+  process-chunks:
+    needs: prepare-metadata
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk_id: ${{ fromJson(format('[{0}]', join(range(1, needs.prepare-metadata.outputs.chunk_count + 1), ','))) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Download chunk manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: chunk-manifests
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Process Chunk ${{ matrix.chunk_id }}
+        id: process
+        run: |
+          chmod +x ./scripts/02-process-chunk.sh
+          ./scripts/02-process-chunk.sh ${{ matrix.chunk_id }}
+          
+      - name: Upload processed chunk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jenkins-plugins-chunk-${{ matrix.chunk_id }}
+          path: jenkins-plugins-chunk-${{ matrix.chunk_id }}/
+          retention-days: 1
+
+  create-release:
+    needs: [prepare-metadata, process-chunks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 릴리즈 생성을 위한 권한
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create release directory
+        run: mkdir -p release_assets/plugins
+
+      - name: Download all processed chunk artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets/plugins
+          pattern: jenkins-plugins-chunk-*
+          merge-multiple: true
+
+      - name: Generate update-center.json
+        run: |
+          chmod +x ./scripts/03-generate-update-center.sh
+          ./scripts/03-generate-update-center.sh release_assets/plugins release_assets/update-center.json
+
+      - name: Package release assets
+        run: |
+          cd release_assets
+          tar -czf ../jenkins-plugins-mirror.tar.gz .
+          sha256sum ../jenkins-plugins-mirror.tar.gz > ../jenkins-plugins-mirror.tar.gz.sha256
+          cd ..
+          
+      - name: Create or Update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          RELEASE_TAG: ${{ needs.prepare-metadata.outputs.release_tag }}
+        run: |
+          gh release list | grep -q "$RELEASE_TAG" && gh release delete "$RELEASE_TAG" -y
+          
+          gh release create "$RELEASE_TAG" \
+            --title "Jenkins Plugins Mirror - $RELEASE_TAG" \
+            --notes "Automated Jenkins plugins mirror. Contains all plugins and update-center.json." \
+            --latest \
+            jenkins-plugins-mirror.tar.gz \
+            jenkins-plugins-mirror.tar.gz.sha256

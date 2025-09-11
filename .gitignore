@@ -1,0 +1,27 @@
+# Build artifacts and temporary files
+plugins.json
+plugin_list*.txt
+chunk_*.txt
+checksums.txt
+jenkins-plugins-chunk-*
+jenkins-mirror/
+original.json
+temp.json
+
+# Release artifacts
+jenkins-plugins-mirror.tar.gz*
+release_assets/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
