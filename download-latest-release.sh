@@ -20,9 +20,28 @@ if [ "$MULTI_PART" -gt 0 ]; then
     echo "📦 Multi-part release detected (${MULTI_PART} parts)"
     echo "Downloading all parts and assembly script..."
     
-    # Download all multi-part files and assembly script
-    gh release download --repo "$REPO_NAME" --pattern "jenkins-plugins-comprehensive-part*.tar.gz*"
-    gh release download --repo "$REPO_NAME" --pattern "assemble-comprehensive-mirror.sh"
+    # Get the latest release tag
+    RELEASE_TAG=$(gh release list --repo "$REPO_NAME" --limit 1 | grep comprehensive | awk '{print $3}')
+    echo "Downloading release: $RELEASE_TAG"
+    
+    # Use curl for stable download of large files (gh CLI has issues with 1GB+ files)
+    echo "Using curl for reliable large file downloads..."
+    for i in $(seq 1 25); do
+        echo "Attempting to download part $i..."
+        curl -L -f -o "jenkins-plugins-comprehensive-part$i.tar.gz" \
+            "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/jenkins-plugins-comprehensive-part$i.tar.gz" 2>/dev/null || {
+            echo "Part $i not found (normal if fewer parts exist)"
+            break
+        }
+        curl -L -f -o "jenkins-plugins-comprehensive-part$i.tar.gz.sha256" \
+            "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/jenkins-plugins-comprehensive-part$i.tar.gz.sha256" 2>/dev/null || {
+            echo "Checksum for part $i not found"
+        }
+    done
+    
+    # Download assembly script
+    curl -L -o "assemble-comprehensive-mirror.sh" \
+        "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/assemble-comprehensive-mirror.sh"
     
     echo "🔍 Verifying checksums..."
     for checksum_file in jenkins-plugins-comprehensive-part*.tar.gz.sha256; do

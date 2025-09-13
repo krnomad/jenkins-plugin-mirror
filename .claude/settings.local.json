@@ -74,7 +74,12 @@
       "Bash(/tmp/jenkins-release-packages-split/jenkins-plugins-comprehensive-part19.tar.gz.sha256 )",
       "Bash(/tmp/jenkins-release-packages-split/jenkins-plugins-comprehensive-part20.tar.gz )",
       "Bash(/tmp/jenkins-release-packages-split/jenkins-plugins-comprehensive-part20.tar.gz.sha256 )",
-      "Bash(/tmp/jenkins-release-packages-split/assemble-comprehensive-mirror.sh:*)"
+      "Bash(/tmp/jenkins-release-packages-split/assemble-comprehensive-mirror.sh:*)",
+      "Read(//home/jwkang2/work/temp/jenkins-plugin-mirror/temp/**)",
+      "Bash(for file in jenkins-plugins-comprehensive-part*.tar.gz.sha256)",
+      "Bash(do echo \"=== Checking $file ===\")",
+      "Bash(sha256sum:*)",
+      "Bash(done)"
     ]
   },
   "enabledMcpjsonServers": [
