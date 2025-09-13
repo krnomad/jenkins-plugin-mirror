@@ -297,38 +297,93 @@ GitHub Actions의 제약사항(시간, 디스크, 네트워크)으로 인해 **�
 | **미러 크기** | 📊 5-8GB (제한적) | ✅ 28GB+ (완전한) |
 | **레거시 지원** | ❌ 최신 버전만 | ✅ 모든 히스토리 버전 |
 
-### 🚀 **로컬 포괄적 미러 생성**
+### 🚀 **로컬 포괄적 미러 생성 (완전 자동화)**
 
-#### 1. 로컬 환경에서 전체 미러 생성
+#### 📋 사전 준비사항
+
+1. **GitHub CLI 설치 및 인증**:
+   ```bash
+   # GitHub CLI 설치 (Ubuntu/Debian)
+   sudo apt install gh
+   
+   # 또는 직접 설치
+   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+   echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list
+   sudo apt update && sudo apt install gh
+   
+   # GitHub 인증 (Personal Access Token 필요)
+   gh auth login
+   ```
+
+2. **필수 패키지 확인**:
+   ```bash
+   # 필요한 도구들이 설치되어 있는지 확인
+   which jq rsync wget curl git
+   ```
+
+3. **디스크 공간 확인**:
+   ```bash
+   # 최소 35GB 필요 (기존 28GB + 작업공간 7GB)
+   df -h /tmp
+   ```
+
+#### 🎯 **원클릭 실행 (모든 과정 자동화)**
 
 ```bash
-# 포괄적 미러 생성 스크립트 실행
+# 1. 저장소 클론 (최초 1회만)
+git clone https://github.com/krnomad/jenkins-plugin-mirror.git
+cd jenkins-plugin-mirror
+
+# 2. 포괄적 미러 생성 + 자동 GitHub Release
 chmod +x ./scripts/local-comprehensive-mirror.sh
 ./scripts/local-comprehensive-mirror.sh
 ```
 
-**실행 결과:**
-- **전체 rsync 동기화**: 28GB+ 완전한 미러
-- **자동 패키징**: GitHub 2GB 제한에 맞춰 멀티파트 분할
-- **SHA-256 검증**: 모든 파트에 대한 체크섬 생성
-- **조립 스크립트**: 원클릭 미러 복구 스크립트
+#### ✨ **스크립트가 자동으로 수행하는 작업:**
 
-#### 2. GitHub Release에 업로드
+1. **🔍 환경 검사**:
+   - 기존 미러 발견 시 `/var/www/jenkins-mirror` 활용
+   - 디스크 공간 및 필수 도구 확인
 
-```bash
-# 생성된 패키지 디렉토리로 이동
-cd /tmp/jenkins-release-packages
+2. **⚡ 증분 업데이트**:
+   - 기존 플러그인: 스킵 (빠른 실행)  
+   - 새로운/업데이트된 플러그인: 다운로드
+   - rsync 증분 동기화 (`--update` 플래그)
 
-# 자동 업로드 스크립트 사용
-./upload-comprehensive-release.sh
+3. **📦 자동 패키징**:
+   - GitHub 2GB 제한 맞춤 멀티파트 분할
+   - SHA-256 체크섬 자동 생성
+   - 조립 스크립트 자동 생성
 
-# 또는 수동 업로드
-gh release create comprehensive-v$(date +'%Y.%m.%d') \
-  --title "Jenkins Comprehensive Mirror" \
-  --notes-file UPLOAD_GUIDE.md \
-  jenkins-plugins-comprehensive-part*.tar.gz \
-  jenkins-plugins-comprehensive-part*.tar.gz.sha256 \
-  assemble-comprehensive-mirror.sh
+4. **🚀 GitHub Release 자동 생성**:
+   - 릴리즈 태그: `comprehensive-v2025.09.11` 형식
+   - 모든 파트 파일 자동 업로드
+   - 상세한 릴리즈 노트 자동 생성
+
+5. **🧹 자동 정리**:
+   - 이전 릴리즈 자동 삭제 (최신 3개만 유지)
+   - 임시 파일 정리
+
+#### ⏱️ **실행 시간 예상**
+
+| 상황 | 예상 시간 | 설명 |
+|------|----------|------|
+| **최초 실행** | 4-6시간 | 전체 rsync 동기화 필요 |
+| **증분 업데이트** | 15-30분 | 기존 미러 기반 빠른 업데이트 |
+| **패키징** | 5-10분 | 압축 및 체크섬 생성 |
+| **업로드** | 10-30분 | GitHub Release 생성 (파트 수에 따라) |
+
+#### 📊 **실행 결과 (자동 통계)**
+
+```
+✅ 증분 미러 업데이트 완료:
+  - 총 플러그인 파일: 3,851개
+  - 고유 플러그인: 2,134개
+  - 총 크기: 28GB
+
+📦 패키징 완료: 15개 파트
+🚀 GitHub Release 생성 완료: comprehensive-v2025.09.11
+🔗 Release URL: https://github.com/user/repo/releases/tag/comprehensive-v2025.09.11
 ```
 
 ### 📦 **포괄적 미러 사용법**

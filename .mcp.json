@@ -74,6 +74,34 @@
         "TRELLO_API_KEY": "your-api-key",
         "TRELLO_TOKEN": "your-token"
       }
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": ["-y", "puppeteer-mcp-server"],
+      "env": {}
+    },
+    "@magicuidesign/mcp": {
+      "command": "npx",
+      "args": ["-y", "@magicuidesign/mcp@latest"]
+    },
+    "MongoDB": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e",
+        "MDB_MCP_READ_ONLY=true",
+        "-e",
+        "MDB_MCP_API_CLIENT_ID",
+        "-e",
+        "MDB_MCP_API_CLIENT_SECRET",
+        "mongodb/mongodb-mcp-server:latest"
+      ],
+      "env": {
+        "MDB_MCP_API_CLIENT_ID": "your-atlas-service-accounts-client-id",
+        "MDB_MCP_API_CLIENT_SECRET": "your-atlas-service-accounts-client-secret"
+      }
     }
   }
 }
