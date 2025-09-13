@@ -14,18 +14,18 @@ echo "🔍 Fetching latest release from repository: $REPO_NAME"
 
 # Check if release has multi-part files
 RELEASE_INFO=$(gh release view --repo "$REPO_NAME" --json assets)
-MULTI_PART=$(echo "$RELEASE_INFO" | jq -r '.assets[].name' | grep -c "jenkins-plugins-mirror-part" || echo "0")
+MULTI_PART=$(echo "$RELEASE_INFO" | jq -r '.assets[].name' | grep -c "jenkins-plugins-comprehensive-part" || echo "0")
 
 if [ "$MULTI_PART" -gt 0 ]; then
     echo "📦 Multi-part release detected (${MULTI_PART} parts)"
     echo "Downloading all parts and assembly script..."
     
     # Download all multi-part files and assembly script
-    gh release download --repo "$REPO_NAME" --latest --pattern "jenkins-plugins-mirror-part*.tar.gz*"
-    gh release download --repo "$REPO_NAME" --latest --pattern "assemble-mirror.sh"
+    gh release download --repo "$REPO_NAME" --pattern "jenkins-plugins-comprehensive-part*.tar.gz*"
+    gh release download --repo "$REPO_NAME" --pattern "assemble-comprehensive-mirror.sh"
     
     echo "🔍 Verifying checksums..."
-    for checksum_file in jenkins-plugins-mirror-part*.tar.gz.sha256; do
+    for checksum_file in jenkins-plugins-comprehensive-part*.tar.gz.sha256; do
         if [ -f "$checksum_file" ]; then
             echo "Verifying $checksum_file..."
             sha256sum -c "$checksum_file"
@@ -33,18 +33,18 @@ if [ "$MULTI_PART" -gt 0 ]; then
     done
     
     echo "🔧 Assembling multi-part release..."
-    chmod +x assemble-mirror.sh
-    ./assemble-mirror.sh
+    chmod +x assemble-comprehensive-mirror.sh
+    ./assemble-comprehensive-mirror.sh
     
     echo "🧹 Cleaning up part files..."
-    rm -f jenkins-plugins-mirror-part*.tar.gz* assemble-mirror.sh
+    rm -f jenkins-plugins-comprehensive-part*.tar.gz* assemble-comprehensive-mirror.sh
     
 else
     echo "📦 Single-part release detected"
     mkdir -p "$DOWNLOAD_DIR"
     
     # Download single archive (fallback for older releases)
-    gh release download --repo "$REPO_NAME" --latest --pattern "jenkins-plugins-mirror.tar.gz*"
+    gh release download --repo "$REPO_NAME" --pattern "jenkins-plugins-mirror.tar.gz*"
     
     echo "🔍 Verifying checksum..."
     sha256sum -c jenkins-plugins-mirror.tar.gz.sha256
@@ -56,18 +56,28 @@ else
     rm jenkins-plugins-mirror.tar.gz jenkins-plugins-mirror.tar.gz.sha256
 fi
 
-PLUGIN_COUNT=$(find "$DOWNLOAD_DIR/plugins" -name "*.hpi" 2>/dev/null | wc -l || echo "0")
-TOTAL_SIZE_MB=$(du -sm "$DOWNLOAD_DIR" 2>/dev/null | cut -f1 || echo "0")
+# Determine the correct directory name based on what was created
+if [ -d "jenkins-comprehensive-mirror" ]; then
+    MIRROR_DIR="jenkins-comprehensive-mirror"
+elif [ -d "$DOWNLOAD_DIR" ]; then
+    MIRROR_DIR="$DOWNLOAD_DIR"
+else
+    MIRROR_DIR="jenkins-mirror"
+fi
+
+PLUGIN_COUNT=$(find "$MIRROR_DIR" -name "*.hpi" -o -name "*.jpi" 2>/dev/null | wc -l || echo "0")
+TOTAL_SIZE_MB=$(du -sm "$MIRROR_DIR" 2>/dev/null | cut -f1 || echo "0")
 
 echo ""
 echo "✅ Success! Jenkins mirror is ready!"
 echo "📊 Statistics:"
-echo "   - Directory: $DOWNLOAD_DIR/"
+echo "   - Directory: $MIRROR_DIR/"
 echo "   - Plugins: $PLUGIN_COUNT"
 echo "   - Total Size: ${TOTAL_SIZE_MB}MB"
 echo ""
 echo "🔧 Next Steps:"
-echo "   1. Edit '$DOWNLOAD_DIR/update-center.json' and replace 'http://your-mirror.example.com' with your server URL"
-echo "   2. Choose a deployment method from README.md:"
+echo "   1. Deploy the mirror using one of these methods:"
 echo "      - Docker Compose (recommended): cd server/docker-image-layered && docker-compose up"
-echo "      - Host Nginx: Follow README.md instructions"
+echo "      - Host Nginx: Copy $MIRROR_DIR to /var/www/ and configure nginx"
+echo "   2. Configure Jenkins Update Site URL:"
+echo "      http://your-server/$MIRROR_DIR/update-center2/update-center.json"

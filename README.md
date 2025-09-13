@@ -36,7 +36,23 @@
 
 ### 1. 최신 릴리즈 다운로드
 
-로컬 환경에 `gh` CLI가 설치되어 있어야 합니다. 
+#### 🔧 사전 요구사항
+
+**GitHub CLI 설치 및 인증**이 필요합니다:
+
+```bash
+# Ubuntu/Debian
+sudo apt install gh
+
+# macOS
+brew install gh
+
+# Windows (Chocolatey)
+choco install gh
+
+# GitHub 인증
+gh auth login
+``` 
 
 #### 🚀 자동 다운로드 (권장)
 
@@ -51,21 +67,23 @@ chmod +x download-latest-release.sh
 
 #### 📦 수동 다운로드 (멀티파트)
 
+**GitHub CLI가 설치되고 인증되어 있어야 합니다** (위 사전 요구사항 참조).
+
 5GB+ 릴리즈의 경우 GitHub의 2GB 제한으로 인해 여러 파트로 분할됩니다:
 
 ```bash
 # 모든 파트 다운로드
-gh release download --pattern="jenkins-plugins-mirror-part*.tar.gz*"
-gh release download --pattern="assemble-mirror.sh"
+gh release download --pattern="jenkins-plugins-comprehensive-part*.tar.gz*"
+gh release download --pattern="assemble-comprehensive-mirror.sh"
 
 # 체크섬 검증
-for file in jenkins-plugins-mirror-part*.tar.gz.sha256; do
+for file in jenkins-plugins-comprehensive-part*.tar.gz.sha256; do
   sha256sum -c "$file"
 done
 
 # 조립
-chmod +x assemble-mirror.sh
-./assemble-mirror.sh
+chmod +x assemble-comprehensive-mirror.sh
+./assemble-comprehensive-mirror.sh
 ```
 
 완료되면 `jenkins-mirror` 디렉토리에 플러그인 파일들과 `update-center.json`이 생성됩니다.
