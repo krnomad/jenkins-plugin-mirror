@@ -21,7 +21,7 @@ if [ "$MULTI_PART" -gt 0 ]; then
     echo "Downloading all parts and assembly script..."
     
     # Get the latest release tag
-    RELEASE_TAG=$(gh release list --repo "$REPO_NAME" --limit 1 | grep comprehensive | awk '{print $3}')
+    RELEASE_TAG=$(gh release list --repo "$REPO_NAME" --limit 1 | grep comprehensive | cut -f3)
     echo "Downloading release: $RELEASE_TAG"
     
     # Use curl for stable download of large files (gh CLI has issues with 1GB+ files)
