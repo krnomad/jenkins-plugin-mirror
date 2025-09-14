@@ -39,10 +39,11 @@ if [ "$MULTI_PART" -gt 0 ]; then
         }
     done
     
-    # Download assembly script
-    echo "Downloading assembly script..."
+    # Download assembly script from git repository (more reliable than release assets)
+    echo "Downloading assembly script from git repository..."
     curl -L -s -o "assemble-comprehensive-mirror.sh" \
-        "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/assemble-comprehensive-mirror.sh"
+        "https://raw.githubusercontent.com/$REPO_NAME/main/assemble-comprehensive-mirror.sh"
+    chmod +x assemble-comprehensive-mirror.sh
     
     echo "🔍 Verifying checksums..."
     for checksum_file in jenkins-plugins-comprehensive-part*.tar.gz.sha256; do
