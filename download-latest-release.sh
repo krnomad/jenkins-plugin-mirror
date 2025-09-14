@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL=$(git remote get-url origin 2>/dev/null || echo "https://github.com/krnomad/jenkins-plugin-mirror")
-REPO_NAME=$(echo "$REPO_URL" | sed -e 's/.*github.com\///' -e 's/\.git$//')
+REPO_NAME=$(echo "$REPO_URL" | sed -e 's/.*github\.com[:/]//' -e 's/\.git$//')
 DOWNLOAD_DIR="jenkins-mirror"
 
 if ! command -v gh &> /dev/null; then
