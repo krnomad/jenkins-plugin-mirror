@@ -28,19 +28,20 @@ if [ "$MULTI_PART" -gt 0 ]; then
     echo "Using curl for reliable large file downloads..."
     for i in $(seq 1 25); do
         echo "Attempting to download part $i..."
-        curl -L -f -o "jenkins-plugins-comprehensive-part$i.tar.gz" \
-            "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/jenkins-plugins-comprehensive-part$i.tar.gz" 2>/dev/null || {
+        curl -L -s -f -o "jenkins-plugins-comprehensive-part$i.tar.gz" \
+            "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/jenkins-plugins-comprehensive-part$i.tar.gz" || {
             echo "Part $i not found (normal if fewer parts exist)"
             break
         }
-        curl -L -f -o "jenkins-plugins-comprehensive-part$i.tar.gz.sha256" \
-            "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/jenkins-plugins-comprehensive-part$i.tar.gz.sha256" 2>/dev/null || {
+        curl -L -s -f -o "jenkins-plugins-comprehensive-part$i.tar.gz.sha256" \
+            "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/jenkins-plugins-comprehensive-part$i.tar.gz.sha256" || {
             echo "Checksum for part $i not found"
         }
     done
     
     # Download assembly script
-    curl -L -o "assemble-comprehensive-mirror.sh" \
+    echo "Downloading assembly script..."
+    curl -L -s -o "assemble-comprehensive-mirror.sh" \
         "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/assemble-comprehensive-mirror.sh"
     
     echo "🔍 Verifying checksums..."
