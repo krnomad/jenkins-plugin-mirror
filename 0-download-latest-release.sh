@@ -26,7 +26,7 @@ if [ "$MULTI_PART" -gt 0 ]; then
     
     # Use curl for stable download of large files (gh CLI has issues with 1GB+ files)
     echo "Using curl for reliable large file downloads..."
-    for i in $(seq 1 25); do
+    for i in $(seq 1 50); do
         echo "Attempting to download part $i..."
         curl -L -s -f -o "jenkins-plugins-comprehensive-part$i.tar.gz" \
             "https://github.com/$REPO_NAME/releases/download/$RELEASE_TAG/jenkins-plugins-comprehensive-part$i.tar.gz" || {
