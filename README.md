@@ -1,42 +1,84 @@
 # Jenkins Plugin Mirror
 
-이 저장소는 GitHub Actions를 통해 매월 자동으로 Jenkins 플러그인 미러를 생성하고 GitHub Release에 배포합니다. 폐쇄망 환경에서 안정적으로 Jenkins 플러그인을 관리할 수 있도록 돕습니다.
+이 저장소는 Jenkins 플러그인 미러 시스템을 제공합니다. 폐쇄망 환경에서 안정적으로 Jenkins 플러그인을 관리하고, 정기적인 업데이트를 지원합니다.
 
-## 🎯 미러 타입별 특징
-### 🌐 **Comprehensive** (폐쇄망 전용)
-- **크기**: ~20-30GB
-- **플러그인**: ~3,000개 (최대한 완전한 미러)
-- **특징**: 플러그인당 최대 10개 버전, 1GB 이하 파일, rsync 기반 히스토리 포함
-- **실행시간**: ~2-4시간
-- **적합**: 레거시 Jenkins 환경 지원이 필요한 폐쇄망
+## 📋 사용자별 워크플로우
 
-### 🗂️ **Full-Filtered**
-- **크기**: ~15-20GB 
-- **플러그인**: ~2,500개
-- **특징**: 플러그인당 최대 5개 버전, 500MB 이하 파일만
-- **실행시간**: ~60-90분  
-- **적합**: 완전한 미러가 필요한 경우
+### 👤 일반 사용자 (미러 서버 구축)
 
-## 🚀 빠른 시작: 미러 사용하기
+대부분의 사용자가 해당하는 시나리오입니다.
 
-### 1. 최신 릴리즈 다운로드
+#### 🌐 **온라인 환경 (권장)**
+인터넷 연결이 가능한 환경에서 미러 서버를 구축하고 운영하는 경우:
 
-#### 🚀 다운로드
-
+**1단계: 최초 미러 구축**
 ```bash
-./download-latest-release.sh
+# 미러 다운로드
+./0-download-latest-release.sh
+
+# 미러 조립
+./1-assemble-comprehensive-mirror.sh
 ```
 
-#### 🚀 조립
+**2단계: 미러 서버 배포**
 ```bash
-./assemble-comprehensive-mirror.sh
+# Docker를 사용한 배포 (권장)
+cd server/docker-image-layered
+docker-compose up -d
 ```
 
-완료되면 `jenkins-mirror` 디렉토리에 플러그인 파일들과 `update-center.json`이 생성됩니다.
+**3단계: 정기 업데이트 (월 1회 권장)**
+```bash
+# 증분 업데이트 실행
+./2-local-comprehensive-mirror.sh
+```
 
-### 2. 미러 서버 실행
+#### 🔒 **폐쇄망 환경**
+인터넷 연결이 제한된 환경에서 미러를 구축하는 경우:
 
-아래 3가지 방법 중 하나를 선택하여 미러 서버를 실행하세요. **(권장: 방법 2)**
+**최초 구축 및 모든 업데이트:**
+```bash
+# 1. 인터넷 가능한 환경에서 다운로드
+./0-download-latest-release.sh
+./1-assemble-comprehensive-mirror.sh
+
+# 2. 생성된 jenkins-comprehensive-mirror 디렉토리를 폐쇄망으로 이전
+
+# 3. 폐쇄망에서 미러 서버 배포
+cd server/docker-image-layered
+docker-compose up -d
+```
+
+**업데이트 시:**
+- 증분 업데이트 불가 (인터넷 연결 필요)
+- 새 릴리즈가 있을 때마다 1-3단계 반복
+- 월 1회 또는 분기 1회 권장
+
+### 🔧 Jenkins 설정 (공통)
+
+미러 서버 구축 후 Jenkins에서 다음과 같이 설정:
+
+1. **Manage Jenkins** → **Manage Plugins** → **Advanced**
+2. **Update Site URL**: `http://your-mirror-server/jenkins-comprehensive-mirror/update-center2/update-center.json`
+3. **Submit** 클릭 후 Jenkins 재시작
+
+## 🎯 미러 정보
+
+### 🌐 **Comprehensive Mirror**
+- **크기**: ~13GB (압축 전), 20개 파트로 분할
+- **플러그인**: 3,000+개 (최대한 완전한 미러)
+- **특징**: 다양한 버전 지원, 레거시 호환성
+- **업데이트**: 월 1회 자동 릴리즈
+
+## 🚀 상세 가이드
+
+### 📦 스크립트 설명
+
+- **0-download-latest-release.sh**: GitHub Release에서 미러 파트 파일들을 다운로드
+- **1-assemble-comprehensive-mirror.sh**: 다운로드된 파트들을 조립하여 완전한 미러 생성
+- **2-local-comprehensive-mirror.sh**: 기존 미러를 증분 업데이트 (온라인 환경 전용)
+
+### 🖥️ 미러 서버 배포 방법
 
 ### 3. Jenkins 설정
 
@@ -283,6 +325,83 @@ server {
 ## 📄 라이선스
 
 이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
+
+---
+
+---
+
+## 👨‍💻 Release Maintainer 가이드
+
+이 섹션은 Jenkins Plugin Mirror의 릴리즈를 생성하고 관리하는 maintainer를 위한 가이드입니다.
+
+### 🔧 Maintainer 환경 요구사항
+
+- **로컬 환경**: 최소 35GB 여유 공간
+- **GitHub CLI**: 인증 설정 완료
+- **필수 도구**: `jq`, `rsync`, `wget`, `curl`, `git`
+
+### 🚀 릴리즈 생성 워크플로우
+
+#### 1. 기존 미러 활용 (권장)
+```bash
+# 기존 미러가 /var/www/jenkins-mirror에 있는 경우
+# 증분 업데이트로 빠르게 새 릴리즈 생성
+
+./2-local-comprehensive-mirror.sh
+```
+
+#### 2. 전체 미러 생성 (최초 또는 기존 미러 없는 경우)
+```bash
+# 전체 다운로드 (4-6시간 소요)
+git clone https://github.com/krnomad/jenkins-plugin-mirror.git
+cd jenkins-plugin-mirror
+./scripts/local-comprehensive-mirror.sh
+```
+
+### 📦 자동화된 릴리즈 프로세스
+
+`2-local-comprehensive-mirror.sh` 스크립트는 다음 과정을 자동으로 수행합니다:
+
+1. **🔍 환경 검사**: 기존 미러 확인, 디스크 공간 검증
+2. **⚡ 증분 업데이트**: rsync를 통한 효율적인 동기화
+3. **📦 자동 패키징**: GitHub 2GB 제한 맞춤 멀티파트 분할
+4. **🚀 GitHub Release**: 자동 태깅, 업로드, 릴리즈 노트 생성
+5. **🧹 정리**: 이전 릴리즈 삭제, 임시 파일 정리
+
+### ⏱️ 실행 시간 가이드
+
+| 상황 | 예상 시간 | 설명 |
+|------|----------|------|
+| **증분 업데이트** | 15-30분 | 기존 미러 기반 빠른 업데이트 |
+| **전체 생성** | 4-6시간 | 전체 rsync 동기화 |
+| **패키징** | 5-10분 | 압축 및 체크섬 생성 |
+| **업로드** | 10-30분 | GitHub Release 생성 |
+
+### 🔄 정기 업데이트 일정
+
+```bash
+# 월간 업데이트 예시
+# 매월 둘째 주 토요일 실행 권장
+0 2 * * 6 [ $(date +\%U) -eq $(date -d "$(date +\%Y-\%m-01) + 1 week" +\%U) ] && cd /path/to/jenkins-plugin-mirror && ./2-local-comprehensive-mirror.sh
+```
+
+### 🛠️ 문제 해결
+
+**릴리즈 실패 시:**
+```bash
+# 이전 릴리즈 수동 삭제
+gh release delete comprehensive-v$(date +'%Y.%m.%d') -y
+
+# 다시 실행
+./2-local-comprehensive-mirror.sh
+```
+
+**디스크 공간 부족:**
+```bash
+# 이전 미러 정리
+rm -rf /tmp/jenkins-comprehensive-mirror
+rm -rf /tmp/jenkins-release-packages-split
+```
 
 ---
 
