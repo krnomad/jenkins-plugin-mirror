@@ -29,11 +29,8 @@
 
 **1단계: 최초 미러 구축**
 ```bash
-# 미러 다운로드
+# 미러 다운로드 및 자동 조립
 ./0-download-latest-release.sh
-
-# 미러 조립
-./1-assemble-comprehensive-mirror.sh
 ```
 
 **2단계: 미러 서버 배포**
@@ -54,11 +51,10 @@ docker-compose up -d
 
 **최초 구축 및 모든 업데이트:**
 ```bash
-# 1. 인터넷 가능한 환경에서 다운로드
+# 1. 인터넷 가능한 환경에서 다운로드 및 조립
 ./0-download-latest-release.sh
-./1-assemble-comprehensive-mirror.sh
 
-# 2. 생성된 jenkins-comprehensive-mirror 디렉토리를 폐쇄망으로 이전
+# 2. 생성된 jenkins-mirror/jenkins-comprehensive-mirror 디렉토리를 폐쇄망으로 이전
 
 # 3. 폐쇄망에서 미러 서버 배포
 cd server/docker-image-layered
@@ -75,7 +71,7 @@ docker-compose up -d
 미러 서버 구축 후 Jenkins에서 다음과 같이 설정:
 
 1. **Manage Jenkins** → **Manage Plugins** → **Advanced**
-2. **Update Site URL**: `http://your-mirror-server/jenkins-comprehensive-mirror/update-center2/update-center.json`
+2. **Update Site URL**: `http://your-mirror-server/jenkins-mirror/jenkins-comprehensive-mirror/update-center2/update-center.json`
 3. **Submit** 클릭 후 Jenkins 재시작
 
 ## 🎯 미러 정보
@@ -90,8 +86,8 @@ docker-compose up -d
 
 ### 📦 스크립트 설명
 
-- **0-download-latest-release.sh**: GitHub Release에서 미러 파트 파일들을 다운로드 (최대 50개 파트 지원)
-- **1-assemble-comprehensive-mirror.sh**: 다운로드된 파트들을 조립하여 완전한 미러 생성
+- **0-download-latest-release.sh**: GitHub Release에서 미러 파트 파일들을 다운로드 및 자동 조립 (최대 50개 파트 지원)
+- **1-assemble-comprehensive-mirror.sh**: 다운로드된 파트들을 조립하여 완전한 미러 생성 (0번 스크립트에서 자동 호출)
 - **2-local-comprehensive-mirror.sh**: 기존 미러를 증분 업데이트 (온라인 환경 전용, 자동 릴리즈 생성)
 
 ### 🖥️ 미러 서버 배포 방법
@@ -105,7 +101,7 @@ docker-compose up -d
 #### 방법 2: Host Nginx
 ```bash
 # 미러 디렉토리를 웹 서버 루트로 복사
-sudo cp -r jenkins-comprehensive-mirror /var/www/
+sudo cp -r jenkins-mirror/jenkins-comprehensive-mirror /var/www/
 # Nginx 설정 파일 참조: server/host-nginx/
 ```
 
@@ -216,7 +212,6 @@ gh auth login
 ```bash
 # 생성된 릴리즈를 사용자 관점에서 테스트
 ./0-download-latest-release.sh
-./1-assemble-comprehensive-mirror.sh
 ```
 
 ### 📦 자동화된 릴리즈 프로세스
