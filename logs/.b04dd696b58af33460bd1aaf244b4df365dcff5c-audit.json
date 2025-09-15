@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/jwkang2/work/jenkins-plugin-mirror/logs/.b04dd696b58af33460bd1aaf244b4df365dcff5c-audit.json",
+    "files": [
+        {
+            "date": 1757970134408,
+            "name": "/home/jwkang2/work/jenkins-plugin-mirror/logs/mcp-puppeteer-2025-09-16.log",
+            "hash": "4c182a18768ebec75ca8c07598e81b0db445f5bc23a04d2f6a75854e98cc57b8"
+        }
+    ],
+    "hashType": "sha256"
+}
